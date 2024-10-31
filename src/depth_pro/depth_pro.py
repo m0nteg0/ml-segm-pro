@@ -39,15 +39,14 @@ class DepthProConfig:
 DEFAULT_MONODEPTH_CONFIG_DICT = DepthProConfig(
     patch_encoder_preset="dinov2l16_384",
     image_encoder_preset="dinov2l16_384",
-    checkpoint_uri="./checkpoints/depth_pro.pt",
-    decoder_features=256,
-    use_fov_head=True,
-    fov_encoder_preset="dinov2l16_384",
+    checkpoint_uri=None,
+    decoder_features=256
 )
 
 
 def create_backbone_model(
-    preset: ViTPreset
+    preset: ViTPreset,
+    use_grad_checkpointing: bool = False
 ) -> Tuple[nn.Module, ViTPreset]:
     """Create and load a backbone model given a config.
 
@@ -62,7 +61,10 @@ def create_backbone_model(
     """
     if preset in VIT_CONFIG_DICT:
         config = VIT_CONFIG_DICT[preset]
-        model = create_vit(preset=preset, use_pretrained=False)
+        model = create_vit(
+            preset=preset, use_pretrained=False,
+            use_grad_checkpointing=use_grad_checkpointing
+        )
     else:
         raise KeyError(f"Preset {preset} not found.")
 
@@ -88,15 +90,11 @@ def create_model_and_transforms(
 
     """
     patch_encoder, patch_encoder_config = create_backbone_model(
-        preset=config.patch_encoder_preset
+        preset=config.patch_encoder_preset, use_grad_checkpointing=True
     )
     image_encoder, _ = create_backbone_model(
-        preset=config.image_encoder_preset
+        preset=config.image_encoder_preset, use_grad_checkpointing=True
     )
-
-    fov_encoder = None
-    if config.use_fov_head and config.fov_encoder_preset is not None:
-        fov_encoder, _ = create_backbone_model(preset=config.fov_encoder_preset)
 
     dims_encoder = patch_encoder_config.encoder_feature_dims
     hook_block_ids = patch_encoder_config.encoder_feature_layer_ids
@@ -114,9 +112,7 @@ def create_model_and_transforms(
     model = DepthPro(
         encoder=encoder,
         decoder=decoder,
-        last_dims=(32, 1),
-        use_fov_head=config.use_fov_head,
-        fov_encoder=fov_encoder,
+        last_dims=(32, 1)
     ).to(device)
 
     if precision == torch.half:
@@ -158,9 +154,7 @@ class DepthPro(nn.Module):
         self,
         encoder: DepthProEncoder,
         decoder: MultiresConvDecoder,
-        last_dims: tuple[int, int],
-        use_fov_head: bool = True,
-        fov_encoder: Optional[nn.Module] = None,
+        last_dims: tuple[int, int]
     ):
         """Initialize DepthPro.
 
@@ -206,16 +200,12 @@ class DepthPro(nn.Module):
         # Set the final convolution layer's bias to be 0.
         self.head[4].bias.data.fill_(0)
 
-        # Set the FOV estimation head.
-        if use_fov_head:
-            self.fov = FOVNetwork(num_features=dim_decoder, fov_encoder=fov_encoder)
-
     @property
     def img_size(self) -> int:
         """Return the internal image size of the network."""
         return self.encoder.img_size
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor]:
         """Decode by projection and fusion of multi-resolution encodings.
 
         Args:
@@ -224,7 +214,8 @@ class DepthPro(nn.Module):
 
         Returns:
         -------
-            The canonical inverse depth map [m] and the optional estimated field of view [deg].
+            The canonical inverse depth map [m] and the optional
+            estimated field of view [deg].
 
         """
         _, _, H, W = x.shape
@@ -234,11 +225,7 @@ class DepthPro(nn.Module):
         features, features_0 = self.decoder(encodings)
         canonical_inverse_depth = self.head(features)
 
-        fov_deg = None
-        if hasattr(self, "fov"):
-            fov_deg = self.fov.forward(x, features_0.detach())
-
-        return canonical_inverse_depth, fov_deg
+        return canonical_inverse_depth
 
     @torch.no_grad()
     def infer(

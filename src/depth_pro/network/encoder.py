@@ -146,26 +146,21 @@ class DepthProEncoder(nn.Module):
     @property
     def img_size(self) -> int:
         """Return the full image size of the SPN network."""
-        return self.patch_encoder.patch_embed.img_size[0] * 4
+        return self.patch_encoder.patch_embed.img_size[0] * 2
 
     def _create_pyramid(
         self, x: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Create a 3-level image pyramid."""
-        # Original resolution: 1536 by default.
+        # Original resolution: 768 by default.
         x0 = x
 
-        # Middle resolution: 768 by default.
+        # Low resolution: 384 by default, corresponding to the backbone resolution.
         x1 = F.interpolate(
             x, size=None, scale_factor=0.5, mode="bilinear", align_corners=False
         )
 
-        # Low resolution: 384 by default, corresponding to the backbone resolution.
-        x2 = F.interpolate(
-            x, size=None, scale_factor=0.25, mode="bilinear", align_corners=False
-        )
-
-        return x0, x1, x2
+        return x0, x1
 
     def split(self, x: torch.Tensor, overlap_ratio: float = 0.25) -> torch.Tensor:
         """Split the input into small patches with sliding window."""
@@ -245,20 +240,18 @@ class DepthProEncoder(nn.Module):
         batch_size = x.shape[0]
 
         # Step 0: create a 3-level image pyramid.
-        x0, x1, x2 = self._create_pyramid(x)
+        x0, x1 = self._create_pyramid(x)
 
         # Step 1: split to create batched overlapped mini-images at the backbone (BeiT/ViT/Dino)
         # resolution.
-        # 5x5 @ 384x384 at the highest resolution (1536x1536).
-        x0_patches = self.split(x0, overlap_ratio=0.25)
         # 3x3 @ 384x384 at the middle resolution (768x768).
-        x1_patches = self.split(x1, overlap_ratio=0.5)
+        x0_patches = self.split(x0, overlap_ratio=0.5)
         # 1x1 # 384x384 at the lowest resolution (384x384).
-        x2_patches = x2
+        x1_patches = x1
 
         # Concatenate all the sliding window patches and form a batch of size (35=5x5+3x3+1x1).
         x_pyramid_patches = torch.cat(
-            (x0_patches, x1_patches, x2_patches),
+            (x0_patches, x1_patches),
             dim=0,
         )
 
@@ -276,7 +269,8 @@ class DepthProEncoder(nn.Module):
             self.out_size,
         )
         x_latent0_features = self.merge(
-            x_latent0_encodings[: batch_size * 5 * 5], batch_size=batch_size, padding=3
+            x_latent0_encodings[: batch_size * 3 * 3],
+            batch_size=batch_size, padding=6
         )
 
         x_latent1_encodings = self.reshape_feature(
@@ -285,27 +279,27 @@ class DepthProEncoder(nn.Module):
             self.out_size,
         )
         x_latent1_features = self.merge(
-            x_latent1_encodings[: batch_size * 5 * 5], batch_size=batch_size, padding=3
+            x_latent1_encodings[: batch_size * 3 * 3],
+            batch_size=batch_size, padding=6
         )
 
         # Split the 35 batch size from pyramid encoding back into 5x5+3x3+1x1.
-        x0_encodings, x1_encodings, x2_encodings = torch.split(
+        x0_encodings, x1_encodings = torch.split(
             x_pyramid_encodings,
-            [len(x0_patches), len(x1_patches), len(x2_patches)],
+            [len(x0_patches), len(x1_patches)],
             dim=0,
         )
 
-        # 96x96 feature maps by merging 5x5 @ 24x24 patches with overlaps.
-        x0_features = self.merge(x0_encodings, batch_size=batch_size, padding=3)
-
         # 48x84 feature maps by merging 3x3 @ 24x24 patches with overlaps.
-        x1_features = self.merge(x1_encodings, batch_size=batch_size, padding=6)
+        x0_features = self.merge(
+            x0_encodings, batch_size=batch_size, padding=6
+        )
 
         # 24x24 feature maps.
-        x2_features = x2_encodings
+        x1_features = x1_encodings
 
         # Apply the image encoder model.
-        x_global_features = self.image_encoder(x2_patches)
+        x_global_features = self.image_encoder(x1_patches)
         x_global_features = self.reshape_feature(
             x_global_features, self.out_size, self.out_size
         )
@@ -316,12 +310,11 @@ class DepthProEncoder(nn.Module):
 
         x0_features = self.upsample0(x0_features)
         x1_features = self.upsample1(x1_features)
-        x2_features = self.upsample2(x2_features)
 
-        x_global_features = self.upsample_lowres(x_global_features)
-        x_global_features = self.fuse_lowres(
-            torch.cat((x2_features, x_global_features), dim=1)
-        )
+        # x_global_features = self.upsample_lowres(x_global_features)
+        # x_global_features = self.fuse_lowres(
+        #     torch.cat((x1_features, x_global_features), dim=1)
+        # )
 
         return [
             x_latent0_features,
