@@ -62,7 +62,7 @@ def create_backbone_model(
     if preset in VIT_CONFIG_DICT:
         config = VIT_CONFIG_DICT[preset]
         model = create_vit(
-            preset=preset, use_pretrained=False,
+            preset=preset, use_pretrained=True,
             use_grad_checkpointing=use_grad_checkpointing
         )
     else:
@@ -194,7 +194,6 @@ class DepthPro(nn.Module):
             ),
             nn.ReLU(True),
             nn.Conv2d(last_dims[0], last_dims[1], kernel_size=1, stride=1, padding=0),
-            nn.ReLU(),
         )
 
         # Set the final convolution layer's bias to be 0.
