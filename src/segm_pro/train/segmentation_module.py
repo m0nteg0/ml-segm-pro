@@ -10,7 +10,7 @@ from .metrics_factory import MetricType, create_metric
 class SegmentationModule(L.LightningModule):
     def __init__(
             self,
-            lr: float = 1e-4,
+            lr: float = 1e-5,
             warmup_steps: int = 30,
             metrics: tuple[MetricType, ...] = (MetricType.IOU,)
     ):
