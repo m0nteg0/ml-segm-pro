@@ -14,16 +14,17 @@ from segmentation_models_pytorch.losses import (
 
 
 class LossMode(Enum):
-    BINARY = constants.BINARY_MODE,
+    BINARY = constants.BINARY_MODE
     MULTICLASS = constants.MULTICLASS_MODE
 
 
 class CommonCE(nn.Module):
-    def __init__(self, mode: LossMode):
+    def __init__(self, mode: str):
         super().__init__()
         self._loss = (
             SoftBCEWithLogitsLoss()
-            if mode.BINARY else SoftCrossEntropyLoss()
+            if mode == LossMode.BINARY.value
+            else SoftCrossEntropyLoss()
         )
 
     def forward(
@@ -36,17 +37,17 @@ class CommonCE(nn.Module):
 
 class LossType(Enum):
     CE = 'CommonCE'
-    IOU = 'JaccardLoss',
-    DICE = 'DiceLoss',
-    FOCAL = 'FocalLoss',
+    IOU = 'JaccardLoss'
+    DICE = 'DiceLoss'
+    FOCAL = 'FocalLoss'
     LOVASZ = 'LovaszLoss'
 
 
 class ComplexLoss(nn.Module):
     def __init__(
             self,
-            losses: tuple[LossType],
-            weights: tuple[float],
+            losses: tuple[LossType, ...],
+            weights: tuple[float, ...],
             loss_mode: LossMode
     ):
         super().__init__()
@@ -77,7 +78,7 @@ class ComplexLoss(nn.Module):
             y_pred: torch.Tensor,
             y_true: torch.Tensor
     ) -> torch.Tensor:
-        losses = torch.tensor([
+        losses = torch.stack([
             loss(y_pred, y_true) * w
             for loss, w in zip(self._losses, self._weights)
         ])
@@ -85,8 +86,8 @@ class ComplexLoss(nn.Module):
 
 
 def create_loss(
-        losses: tuple[LossType],
-        weights: tuple[float],
+        losses: tuple[LossType, ...],
+        weights: tuple[float, ...],
         loss_mode: LossMode
 ):
     return ComplexLoss(losses, weights, loss_mode)

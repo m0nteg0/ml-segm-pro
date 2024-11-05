@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from transformers import get_linear_schedule_with_warmup
 
 from .metrics_factory import MetricType, create_metric
+from .loss_factory import LossType, LossMode, create_loss
 
 
 class SegmentationModule(L.LightningModule):
@@ -12,7 +13,10 @@ class SegmentationModule(L.LightningModule):
             self,
             lr: float = 1e-5,
             warmup_steps: int = 30,
-            metrics: tuple[MetricType, ...] = (MetricType.IOU,)
+            metrics: tuple[MetricType, ...] = (MetricType.IOU,),
+            losses: tuple[LossType, ...] = (LossType.CE, LossType.DICE),
+            loss_weights: tuple[float, ...] = (0.5, 0.5),
+            loss_mode: LossMode = LossMode.BINARY
     ):
         super().__init__()
         self._metrics = {}
@@ -20,6 +24,9 @@ class SegmentationModule(L.LightningModule):
             depth_pro.create_model_and_transforms()
         )
         self._init_metrics(metrics)
+        self._loss = create_loss(
+            losses, loss_weights, loss_mode
+        )
         self.save_hyperparameters()
 
     @property
@@ -37,7 +44,7 @@ class SegmentationModule(L.LightningModule):
         # training_step defines the train loop.
         x, y = batch
         prediction = self._model(x)
-        loss = F.binary_cross_entropy_with_logits(prediction, y)
+        loss = self._loss(prediction, y)
         self.log(
             'batch_train_loss', loss.item(), True, on_step=True,
             on_epoch=False, logger=False
@@ -55,7 +62,7 @@ class SegmentationModule(L.LightningModule):
         # training_step defines the validation loop.
         x, y = batch
         prediction = self._model(x)
-        loss = F.binary_cross_entropy_with_logits(prediction, y)
+        loss = self._loss(prediction, y)
         self.log(
             'val_loss', loss.item(), True, on_step=False,
             on_epoch=True, logger=True
