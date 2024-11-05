@@ -29,14 +29,23 @@ class SegmentationModule(L.LightningModule):
     def _init_metrics(self, metrics: tuple[MetricType, ...]):
         self._metrics = {}
         for metric_type in metrics:
-            self._metrics[metric_type.value] = (create_metric(metric_type))
+            self._metrics[metric_type.value] = create_metric(
+                metric_type
+            ).to('cuda')
 
     def training_step(self, batch, batch_idx):
         # training_step defines the train loop.
         x, y = batch
         prediction = self._model(x)
         loss = F.binary_cross_entropy_with_logits(prediction, y)
-        self.log('train_loss', loss.item(), True, on_step=True)
+        self.log(
+            'batch_train_loss', loss.item(), True, on_step=True,
+            on_epoch=False, logger=False
+        )
+        self.log(
+            'train_loss', loss.item(), True, on_step=False,
+            on_epoch=True, logger=True
+        )
 
         lr = self.trainer.lr_scheduler_configs[0].scheduler.get_last_lr()[0]
         self.log('lr', lr, True, on_step=True)
@@ -52,14 +61,15 @@ class SegmentationModule(L.LightningModule):
             on_epoch=True, logger=True
         )
 
+        prediction = (torch.sigmoid(prediction) > 0.5).int()
         for metric in self._metrics:
-            self._metrics[metric](prediction, y)
+            self._metrics[metric](prediction, y.int())
 
         return loss
 
-    def on_predict_epoch_end(self) -> None:
+    def on_validation_epoch_end(self) -> None:
         for metric in self._metrics:
-            value = self._metrics[metric].compute()
+            value = self._metrics[metric].compute().item()
             self.log(metric, value, prog_bar=True, logger=True)
 
     def configure_optimizers(self):

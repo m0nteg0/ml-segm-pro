@@ -8,7 +8,7 @@ from torchmetrics.segmentation import (
 
 
 class MetricType(Enum):
-    IOU = 'MeanIoU',
+    IOU = 'MeanIoU'
     DICE = 'Dice'
     HD = 'HausdorffDistance'
 
