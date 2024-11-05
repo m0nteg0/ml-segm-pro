@@ -4,18 +4,32 @@ import lightning as L
 import torch.nn.functional as F
 from transformers import get_linear_schedule_with_warmup
 
+from .metrics_factory import MetricType, create_metric
+
 
 class SegmentationModule(L.LightningModule):
     def __init__(
             self,
             lr: float = 1e-4,
-            warmup_steps: int = 30
+            warmup_steps: int = 30,
+            metrics: tuple[MetricType, ...] = (MetricType.IOU,)
     ):
         super().__init__()
+        self._metrics = {}
         self._model, _ = (
             depth_pro.create_model_and_transforms()
         )
+        self._init_metrics(metrics)
         self.save_hyperparameters()
+
+    @property
+    def model(self):
+        return self._model
+
+    def _init_metrics(self, metrics: tuple[MetricType, ...]):
+        self._metrics = {}
+        for metric_type in metrics:
+            self._metrics[metric_type.value] = (create_metric(metric_type))
 
     def training_step(self, batch, batch_idx):
         # training_step defines the train loop.
@@ -28,9 +42,25 @@ class SegmentationModule(L.LightningModule):
         self.log('lr', lr, True, on_step=True)
         return loss
 
-    @property
-    def model(self):
-        return self._model
+    def validation_step(self, batch, batch_idx):
+        # training_step defines the validation loop.
+        x, y = batch
+        prediction = self._model(x)
+        loss = F.binary_cross_entropy_with_logits(prediction, y)
+        self.log(
+            'val_loss', loss.item(), True, on_step=False,
+            on_epoch=True, logger=True
+        )
+
+        for metric in self._metrics:
+            self._metrics[metric](prediction, y)
+
+        return loss
+
+    def on_predict_epoch_end(self) -> None:
+        for metric in self._metrics:
+            value = self._metrics[metric].compute()
+            self.log(metric, value, prog_bar=True, logger=True)
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(
