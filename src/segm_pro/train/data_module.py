@@ -4,23 +4,56 @@ import lightning as L
 import albumentations as A
 from torch.utils.data import DataLoader
 from albumentations.pytorch import ToTensorV2
+from pydantic import BaseModel, Field
 
 from .dataset import SegmDataset
 
 
+class DataParams(BaseModel):
+    train_data: Path = Field(
+        description='Path to train dataset.'
+    )
+
+    val_data: Path = Field(
+        description='Path to validation dataset.'
+    )
+
+    train_bs: int = Field(
+        ge=1,
+        default=1,
+        description='Train batch size.'
+    )
+
+    val_bs: int = Field(
+        ge=1,
+        default=1,
+        description='Validation batch size.'
+    )
+
+    train_workers: int = Field(
+        ge=0,
+        default=0,
+        description='Number of train workers.'
+    )
+
+    val_workers: int = Field(
+        ge=0,
+        default=0,
+        description='Number of validation workers.'
+    )
+
+
 class SegmDSModule(L.LightningDataModule):
-    def __init__(self, path: Path, train_bs: int, val_bs: int):
+    def __init__(self, params: DataParams):
         super().__init__()
-        self.__ds_root = path
-        self.__train_bs = train_bs
-        self.__val_bs = val_bs
+        self._data_params = params
 
     def setup(self, stage: str) -> None:
         self.__train_ds = SegmDataset(
-            self.__ds_root, self.__get_train_transform()
+            self._data_params.train_data, self.__get_train_transform()
         )
         self.__val_ds = SegmDataset(
-            self.__ds_root, self.__get_val_transform()
+            self._data_params.val_data, self.__get_val_transform()
         )
 
     def __get_train_transform(self):
@@ -49,7 +82,15 @@ class SegmDSModule(L.LightningDataModule):
         ])
 
     def train_dataloader(self):
-        return DataLoader(self.__train_ds, batch_size=self.__train_bs)
+        return DataLoader(
+            self.__train_ds,
+            batch_size=self._data_params.train_bs,
+            num_workers=self._data_params.train_workers
+        )
 
     def val_dataloader(self):
-        return DataLoader(self.__val_ds, batch_size=self.__val_bs)
+        return DataLoader(
+            self.__val_ds,
+            batch_size=self._data_params.val_bs,
+            num_workers=self._data_params.val_workers
+        )

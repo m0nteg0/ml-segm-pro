@@ -13,8 +13,8 @@ train:
   device: 0
 
 data:
-  train_data: data/datasets/human-seg-of
-  val_data: data/datasets/human-seg-of
+  train_data: ../data/datasets/human-seg-of
+  val_data: ../data/datasets/human-seg-of
   train_bs: 1
   val_bs: 1
   train_workers: 0
