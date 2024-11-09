@@ -1,9 +1,8 @@
 import torch
 import depth_pro
 import lightning as L
-import torch.nn.functional as F
 from transformers import get_linear_schedule_with_warmup
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 from .metrics_factory import MetricType, create_metric
 from .loss_factory import LossType, LossMode, create_loss
@@ -16,7 +15,7 @@ class TrainParams(BaseModel):
         description='Learning rate value.'
     )
 
-    warmup: int = Field(
+    warmup_steps: int = Field(
         ge=0,
         default=30,
         description='Number of warmup iterations'
