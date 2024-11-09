@@ -36,7 +36,7 @@ class CommonCE(nn.Module):
 
 
 class LossType(Enum):
-    CE = 'CommonCE'
+    CE = 'CELoss'
     IOU = 'JaccardLoss'
     DICE = 'DiceLoss'
     FOCAL = 'FocalLoss'

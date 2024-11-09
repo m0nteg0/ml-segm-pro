@@ -3,31 +3,68 @@ import depth_pro
 import lightning as L
 import torch.nn.functional as F
 from transformers import get_linear_schedule_with_warmup
+from pydantic import BaseModel, Field, field_validator
 
 from .metrics_factory import MetricType, create_metric
 from .loss_factory import LossType, LossMode, create_loss
 
 
+class TrainParams(BaseModel):
+    lr: float = Field(
+        ge=0,
+        default=1e-5,
+        description='Learning rate value.'
+    )
+
+    warmup: int = Field(
+        ge=0,
+        default=30,
+        description='Number of warmup iterations'
+    )
+
+    metrics: list[MetricType] = Field(
+        default=[MetricType.IOU],
+        description='List of segmentation metrics'
+    )
+
+    losses: list[LossType] = Field(
+        default=[LossType.CE, LossType.DICE],
+        description='List of segmentation losses'
+    )
+
+    loss_weights: list[float] = Field(
+        default=[0.5, 0.5],
+        description='List of losses weights'
+    )
+
+    loss_mode: LossMode = Field(
+        default=LossMode.BINARY,
+        description='Loss type: "binary", "multiclass"'
+    )
+
+    device: int = Field(
+        ge=0,
+        default=0,
+        description='Device number'
+    )
+
+
 class SegmentationModule(L.LightningModule):
     def __init__(
             self,
-            lr: float = 1e-5,
-            warmup_steps: int = 30,
-            metrics: tuple[MetricType, ...] = (MetricType.IOU,),
-            losses: tuple[LossType, ...] = (LossType.CE, LossType.DICE),
-            loss_weights: tuple[float, ...] = (0.5, 0.5),
-            loss_mode: LossMode = LossMode.BINARY
+            params: TrainParams
     ):
         super().__init__()
         self._metrics = {}
         self._model, _ = (
             depth_pro.create_model_and_transforms()
         )
-        self._init_metrics(metrics)
+        self._init_metrics(tuple(params.metrics))
         self._loss = create_loss(
-            losses, loss_weights, loss_mode
+            tuple(params.losses),
+            tuple(params.loss_weights), params.loss_mode
         )
-        self.save_hyperparameters()
+        self._train_params = params
 
     @property
     def model(self):
@@ -81,11 +118,11 @@ class SegmentationModule(L.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(
-            self._model.parameters(), lr=self.hparams.lr
+            self._model.parameters(), lr=self._train_params.lr
         )
         scheduler = get_linear_schedule_with_warmup(
             optimizer,
-            num_warmup_steps=self.hparams.warmup_steps,
+            num_warmup_steps=self._train_params.warmup_steps,
             num_training_steps=self.trainer.estimated_stepping_batches,
         )
         scheduler = {
