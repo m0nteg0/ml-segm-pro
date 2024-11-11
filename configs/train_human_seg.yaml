@@ -1,0 +1,28 @@
+logging:
+  exp_name: human_seg
+  log_every_n_steps: 50
+  default_root_dir: ../data/checkpoints
+  best_metric: MeanIoU
+
+train:
+  epochs: 100
+  lr: 1e-5
+  warmup_steps: 100
+  metrics:
+    - MeanIoU
+  losses:
+    - CELoss
+    - DiceLoss
+  loss_weights:
+    - 0.5
+    - 0.5
+  loss_mode: binary
+  device: 0
+
+data:
+  train_data: ../data/datasets/human-seg/train
+  val_data: ../data/datasets/human-seg/val
+  train_bs: 3
+  val_bs: 3
+  train_workers: 4
+  val_workers: 4
