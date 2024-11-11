@@ -4,6 +4,8 @@ from pathlib import Path
 import yaml
 import lightning as L
 from clearml import Task
+from lightning.pytorch.callbacks import ModelCheckpoint
+
 from segm_pro.train import (
     SegmentationModule,
     SegmDSModule,
@@ -19,6 +21,10 @@ def parse_args():
     parser.add_argument(
         '--config', type=Path, required=True,
         help='Path to train config *.yaml'
+    )
+    parser.add_argument(
+        '--ckpt', type=Path,
+        help='Path to model checlpoint.'
     )
     parser.add_argument(
         '--clearml', action='store_true',
@@ -42,14 +48,23 @@ def main():
     data_params = DataParams(**config['data'])
 
     data_module = SegmDSModule(data_params)
-    model = SegmentationModule(train_params)
+    if args.ckpt:
+        model = SegmentationModule.load_from_checkpoint(args.ckpt)
+    else:
+        model = SegmentationModule(train_params)
 
     save_dir = Path(config['logging']['default_root_dir'])
     save_dir = save_dir / config['logging']['exp_name']
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=save_dir, save_top_k=1,
+        monitor=config['logging']['best_metric']
+    )
+
     trainer = L.Trainer(
         gradient_clip_val=0.5,
         gradient_clip_algorithm='value',
         default_root_dir=save_dir,
+        callbacks=[checkpoint_callback],
         max_epochs=config['train']['epochs'],
         log_every_n_steps=config['logging']['log_every_n_steps']
     )
