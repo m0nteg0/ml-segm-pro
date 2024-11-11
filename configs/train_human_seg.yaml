@@ -24,5 +24,5 @@ data:
   val_data: ../data/datasets/human-seg/val
   train_bs: 3
   val_bs: 3
-  train_workers: 4
-  val_workers: 4
+  train_workers: 8
+  val_workers: 8
