@@ -4,7 +4,6 @@ from pathlib import Path
 import yaml
 import lightning as L
 from clearml import Task
-from lightning.pytorch.loggers import TensorBoardLogger
 from segm_pro.train import (
     SegmentationModule,
     SegmDSModule,
@@ -33,12 +32,10 @@ def main():
     with args.config.open('r') as file:
         config = yaml.safe_load(file)
 
-    logger = None
     if args.clearml:
         Task.init(
             project_name="segm-pro", task_name="test_launch"
         )
-        logger = TensorBoardLogger("tb_logs", name="test_launch")
 
     train_params = TrainParams(**config['train'])
     data_params = DataParams(**config['data'])
@@ -49,7 +46,6 @@ def main():
     trainer = L.Trainer(
         gradient_clip_val=0.5,
         gradient_clip_algorithm="value",
-        logger=logger
     )
     trainer.fit(model, datamodule=data_module)
 
