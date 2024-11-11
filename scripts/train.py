@@ -32,9 +32,10 @@ def main():
     with args.config.open('r') as file:
         config = yaml.safe_load(file)
 
+    exp_name = config['logging']['exp_name']
     if args.clearml:
         Task.init(
-            project_name="segm-pro", task_name="test_launch"
+            project_name='segm-pro', task_name=exp_name
         )
 
     train_params = TrainParams(**config['train'])
@@ -43,9 +44,14 @@ def main():
     data_module = SegmDSModule(data_params)
     model = SegmentationModule(train_params)
 
+    save_dir = Path(config['logging']['default_root_dir'])
+    save_dir = save_dir / config['logging']['exp_name']
     trainer = L.Trainer(
         gradient_clip_val=0.5,
-        gradient_clip_algorithm="value",
+        gradient_clip_algorithm='value',
+        default_root_dir=save_dir,
+        max_epochs=config['train']['epochs'],
+        log_every_n_steps=config['logging']['log_every_n_steps']
     )
     trainer.fit(model, datamodule=data_module)
 
