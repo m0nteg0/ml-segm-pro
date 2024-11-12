@@ -51,9 +51,10 @@ class TrainParams(BaseModel):
 class SegmentationModule(L.LightningModule):
     def __init__(
             self,
-            params: TrainParams
+            params: TrainParams | None = None
     ):
         super().__init__()
+        params = params if params is not None else TrainParams()
         self._metrics = {}
         self._model, _ = (
             depth_pro.create_model_and_transforms()
