@@ -55,16 +55,23 @@ def main():
 
     save_dir = Path(config['logging']['default_root_dir'])
     save_dir = save_dir / config['logging']['exp_name']
-    checkpoint_callback = ModelCheckpoint(
+
+    best_metric = config['logging']['best_metric']
+    best_saver = ModelCheckpoint(
         dirpath=save_dir, save_top_k=1,
-        monitor=config['logging']['best_metric']
+        every_n_epochs=1, filename=f'best_{best_metric}',
+        monitor=best_metric
+    )
+    last_saver = ModelCheckpoint(
+        dirpath=save_dir, save_top_k=0,
+        every_n_epochs=1, save_last=True
     )
 
     trainer = L.Trainer(
         gradient_clip_val=0.5,
         gradient_clip_algorithm='value',
         default_root_dir=save_dir,
-        callbacks=[checkpoint_callback],
+        callbacks=[best_saver, last_saver],
         max_epochs=config['train']['epochs'],
         log_every_n_steps=config['logging']['log_every_n_steps']
     )
