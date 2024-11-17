@@ -108,26 +108,6 @@ class DepthProEncoder(nn.Module):
         self.upsample1 = _create_project_upsample_block(
             dim_in=patch_encoder_embed_dim, dim_out=self.dims_encoder[2], upsample_layers=1
         )
-        self.upsample2 = _create_project_upsample_block(
-            dim_in=patch_encoder_embed_dim, dim_out=self.dims_encoder[3], upsample_layers=1
-        )
-
-        self.upsample_lowres = nn.ConvTranspose2d(
-            in_channels=image_encoder_embed_dim,
-            out_channels=self.dims_encoder[3],
-            kernel_size=2,
-            stride=2,
-            padding=0,
-            bias=True,
-        )
-        self.fuse_lowres = nn.Conv2d(
-            in_channels=(self.dims_encoder[3] + self.dims_encoder[3]),
-            out_channels=self.dims_encoder[3],
-            kernel_size=1,
-            stride=1,
-            padding=0,
-            bias=True,
-        )
 
         # Obtain intermediate outputs of the blocks.
         self.patch_encoder.blocks[self.hook_block_ids[0]].register_forward_hook(
@@ -310,11 +290,6 @@ class DepthProEncoder(nn.Module):
 
         x0_features = self.upsample0(x0_features)
         x1_features = self.upsample1(x1_features)
-
-        # x_global_features = self.upsample_lowres(x_global_features)
-        # x_global_features = self.fuse_lowres(
-        #     torch.cat((x1_features, x_global_features), dim=1)
-        # )
 
         return [
             x_latent0_features,
