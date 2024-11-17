@@ -1,3 +1,5 @@
+"""A PyTorch Lightning module for training segmentation models."""
+
 import torch
 import depth_pro
 import lightning as L
@@ -10,6 +12,8 @@ from .loss_factory import LossType, LossMode, create_loss
 
 
 class TrainParams(BaseModel):
+    """Parameters for training a segmentation model."""
+
     lr: float = Field(
         ge=0,
         default=1e-5,
@@ -56,6 +60,13 @@ class TrainParams(BaseModel):
 
 
 class SegmentationModule(L.LightningModule):
+    """A PyTorch Lightning module for training segmentation models.
+
+    This module defines the architecture and training loop for a
+    segmentation task. It utilizes pre-defined model creation, loss functions,
+    and metrics based on provided parameters.
+    """
+
     def __init__(
             self,
             params: TrainParams | None = None
@@ -78,17 +89,38 @@ class SegmentationModule(L.LightningModule):
 
     @property
     def model(self):
+        """Return segmentation model."""
         return self._model
 
     def _init_metrics(self, metrics: tuple[MetricType, ...]):
+        """Initialize segmentation metrics."""
         self._metrics = {}
         for metric_type in metrics:
             self._metrics[metric_type.value] = create_metric(
                 metric_type
             ).to('cuda')
 
-    def training_step(self, batch, batch_idx):
-        # training_step defines the train loop.
+    def training_step(
+            self,
+            batch : tuple[torch.Tensor],
+            batch_idx: int
+    ) -> torch.Tensor:
+        """Perform a single training step.
+
+        Parameters
+        ----------
+        batch : tuple[torch.Tensor]
+            A tuple containing the input images, target masks, and other
+            relevant data.
+        batch_idx : _type_
+            The index of the current batch.
+
+        Returns
+        -------
+        torch.Tensor
+            The calculated loss for the batch.
+
+        """
         _, x, y = batch
         prediction = self._model(x)
 
@@ -107,8 +139,22 @@ class SegmentationModule(L.LightningModule):
 
         return loss
 
-    def validation_step(self, batch, batch_idx):
-        # training_step defines the validation loop.
+    def validation_step(
+            self,
+            batch : tuple[torch.Tensor],
+            batch_idx: int
+    ):
+        """Perform a single validation step.
+
+        Parameters
+        ----------
+        batch : tuple[torch.Tensor]
+            A tuple containing the input images, target masks, and other
+            relevant data.
+        batch_idx : int
+            The index of the current batch.
+
+        """
         images, x, y = batch
         prediction = self._model(x)
         loss = self._loss(prediction, y)
@@ -130,9 +176,19 @@ class SegmentationModule(L.LightningModule):
             if len(self._debug_images) == self._n_debug_images:
                 self._log_debug_images()
 
-        return loss
-
     def on_validation_epoch_end(self) -> None:
+        """Log validation metrics and clears debug images.
+
+        This method iterates through the configured metrics,
+        computes their values for the current validation epoch, and logs
+        them using `self.log`. The `prog_bar` and `logger` arguments ensure
+        that the metrics are displayed in the progress bar and written to
+        the specified logger.
+
+        Additionally, it clears the lists `self._debug_images` and
+        `self._debug_preds`, which likely store images and corresponding
+        predictions for debugging purposes.
+        """
         for metric in self._metrics:
             value = self._metrics[metric].compute().item()
             self.log(metric, value, prog_bar=True, logger=True)
@@ -161,6 +217,7 @@ class SegmentationModule(L.LightningModule):
         )
 
     def configure_optimizers(self):
+        """Configures the optimizer and learning rate scheduler for training."""
         optimizer = torch.optim.AdamW(
             self._model.parameters(), lr=self._train_params.lr
         )

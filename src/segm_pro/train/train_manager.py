@@ -1,3 +1,5 @@
+"""Class that manages the training process for a segmentation model."""
+
 import argparse
 from pathlib import Path
 from shutil import copy
@@ -13,6 +15,14 @@ from .data_module import SegmDSModule, DataParams
 
 
 class TrainManager:
+    """Manages the training process for a segmentation model.
+
+    This class orchestrates the entire training pipeline, from parsing
+    configuration files to initializing models, data modules, and trainers.
+    It also handles saving checkpoints and logging progress to
+    ClearML if specified.
+    """
+
     def __init__(self):
         args = self._parse_args()
         with args.config.open('r') as file:
