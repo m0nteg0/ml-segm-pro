@@ -67,15 +67,18 @@ def main():
         every_n_epochs=1, save_last=True
     )
 
+    epochs = config['train'].get('epochs', 100)
     acc_grad_batches = config['train'].get('acc_grad_batches', 1)
+    gradient_clip_val = config['train'].get('gradient_clip_val', 0.5)
+    log_every_n_steps = config['logging'].get('log_every_n_steps', 50)
     trainer = L.Trainer(
-        gradient_clip_val=0.5,
+        gradient_clip_val=gradient_clip_val,
         gradient_clip_algorithm='value',
         accumulate_grad_batches=acc_grad_batches,
         default_root_dir=save_dir,
         callbacks=[best_saver, last_saver],
-        max_epochs=config['train']['epochs'],
-        log_every_n_steps=config['logging']['log_every_n_steps']
+        max_epochs=epochs,
+        log_every_n_steps=log_every_n_steps
     )
     trainer.fit(model, datamodule=data_module)
 

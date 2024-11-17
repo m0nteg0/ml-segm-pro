@@ -19,6 +19,7 @@ train:
   loss_mode: binary
   device: 0
   n_debug_images: 5
+  gradient_clip_val: 0.5
 
 data:
   train_data: ../data/datasets/human-seg-of
