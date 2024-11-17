@@ -67,9 +67,11 @@ def main():
         every_n_epochs=1, save_last=True
     )
 
+    acc_grad_batches = config['train'].get('acc_grad_batches', 1)
     trainer = L.Trainer(
         gradient_clip_val=0.5,
         gradient_clip_algorithm='value',
+        accumulate_grad_batches=acc_grad_batches,
         default_root_dir=save_dir,
         callbacks=[best_saver, last_saver],
         max_epochs=config['train']['epochs'],
