@@ -1,5 +1,6 @@
 logging:
   exp_name: test_launch
+  project_name: segm-pro
   log_every_n_steps: 50
   default_root_dir: ../data/checkpoints
   best_metric: MeanIoU

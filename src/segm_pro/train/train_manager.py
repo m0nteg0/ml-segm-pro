@@ -1,5 +1,6 @@
 import argparse
 from pathlib import Path
+from shutil import copy
 
 import yaml
 import lightning as L
@@ -32,11 +33,14 @@ class TrainManager:
                 proj_name = config['logging']['project_name']
             except Exception as e:
                 raise RuntimeError(
-                    'Failed to find <project_name> field in logging section.'
+                    'Failed to find <project_name> field in logging section, '
                     '<project_name> is required attribute for clearml logging.'
                 ) from e
             Task.init(
                 project_name=proj_name, task_name=exp_name
+            )
+            Task.current_task().upload_artifact(
+                'config', artifact_object=args.config
             )
 
         # Get train and data params
@@ -55,6 +59,9 @@ class TrainManager:
         # Set save directory.
         save_dir = Path(config['logging'].get('default_root_dir', './'))
         save_dir = save_dir / exp_name
+
+        # Copy config to save_dir
+        copy(args.config, save_dir / 'config.yaml')
 
         # Set checkpointing callbacks.
         best_metric = config['logging'].get(
