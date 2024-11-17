@@ -66,14 +66,25 @@ class SegmDSModule(L.LightningDataModule):
             A.RandomBrightnessContrast(
                 brightness_limit=0.3, contrast_limit=0.3, p=0.5
             ),
-            A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+            A.OneOf([
+                A.GaussNoise(p=1),
+                A.GaussianBlur(p=1),
+            ], p=0.1),
+            A.ImageCompression(50, 100, p=0.2),
+            A.Normalize(
+                mean=(0.485, 0.456, 0.406),
+                std=(0.229, 0.224, 0.225)
+            ),
             ToTensorV2(),
         ])
 
     def __get_val_transform(self):
         return A.Compose([
             A.Resize(768, 768),
-            A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+            A.Normalize(
+                mean=(0.485, 0.456, 0.406),
+                std=(0.229, 0.224, 0.225)
+            ),
             ToTensorV2(),
         ])
 
