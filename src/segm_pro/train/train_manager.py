@@ -69,6 +69,7 @@ class TrainManager:
         # Set save directory.
         save_dir = Path(config['logging'].get('default_root_dir', './'))
         save_dir = save_dir / exp_name
+        save_dir.mkdir(parents=True, exist_ok=True)
 
         # Copy config to save_dir
         copy(args.config, save_dir / 'config.yaml')
