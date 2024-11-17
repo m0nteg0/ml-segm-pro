@@ -1,6 +1,7 @@
 import torch
 import depth_pro
 import lightning as L
+from torchvision.utils import make_grid
 from transformers import get_linear_schedule_with_warmup
 from pydantic import BaseModel, Field
 
@@ -47,6 +48,12 @@ class TrainParams(BaseModel):
         description='Device number'
     )
 
+    n_debug_images: int = Field(
+        ge=0,
+        default=5,
+        description='Number debug images'
+    )
+
 
 class SegmentationModule(L.LightningModule):
     def __init__(
@@ -65,6 +72,9 @@ class SegmentationModule(L.LightningModule):
             tuple(params.loss_weights), params.loss_mode
         )
         self._train_params = params
+        self._debug_images = []
+        self._debug_preds = []
+        self._n_debug_images = params.n_debug_images
 
     @property
     def model(self):
@@ -79,8 +89,9 @@ class SegmentationModule(L.LightningModule):
 
     def training_step(self, batch, batch_idx):
         # training_step defines the train loop.
-        x, y = batch
+        _, x, y = batch
         prediction = self._model(x)
+
         loss = self._loss(prediction, y)
         self.log(
             'batch_train_loss', loss.item(), True, on_step=True,
@@ -92,22 +103,32 @@ class SegmentationModule(L.LightningModule):
         )
 
         lr = self.trainer.lr_scheduler_configs[0].scheduler.get_last_lr()[0]
-        self.log('lr', lr, True, on_step=True)
+        self.log('lr', lr, True, on_step=True, logger=False)
+
         return loss
 
     def validation_step(self, batch, batch_idx):
         # training_step defines the validation loop.
-        x, y = batch
+        images, x, y = batch
         prediction = self._model(x)
         loss = self._loss(prediction, y)
         self.log(
             'val_loss', loss.item(), True, on_step=False,
             on_epoch=True, logger=True
         )
-
+        # Accumulate metrics
         prediction = (torch.sigmoid(prediction) > 0.5).int()
         for metric in self._metrics:
             self._metrics[metric](prediction, y.int())
+        # Log debug images
+        images_diff = (
+                self._n_debug_images - len(self._debug_images)
+        )
+        if images_diff > 0 and self._n_debug_images > 0:
+            self._debug_images = [*self._debug_images, images[:images_diff]]
+            self._debug_preds = [*self._debug_preds, prediction[:images_diff]]
+            if len(self._debug_images) == self._n_debug_images:
+                self._log_debug_images()
 
         return loss
 
@@ -115,6 +136,29 @@ class SegmentationModule(L.LightningModule):
         for metric in self._metrics:
             value = self._metrics[metric].compute().item()
             self.log(metric, value, prog_bar=True, logger=True)
+        self._debug_images = []
+        self._debug_preds = []
+
+    def _log_debug_images(self):
+        """Log debug images."""
+        tensorboard = self.logger.experiment
+        images = torch.concat(self._debug_images, 0)
+        prediction = torch.concat(self._debug_preds, 0)
+
+        images = torch.permute(images, [0, 3, 1, 2])
+        images = torch.flip(images, (1,)).cpu().float()
+
+        prediction = torch.repeat_interleave(prediction, 3, 1)
+        prediction = prediction.detach().cpu().float() * 255
+
+        pred_mask = torch.tensor([0, 1, 0], dtype=torch.float32)
+        pred_mask = pred_mask.view(1, 3, 1, 1)
+        prediction *= pred_mask
+
+        images = (images * 0.7 + prediction * 0.3).to(dtype=torch.uint8)
+        tensorboard.add_image(
+            "val_images", make_grid(images, 3), self.current_epoch
+        )
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(

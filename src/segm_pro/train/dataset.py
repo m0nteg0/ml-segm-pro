@@ -33,4 +33,10 @@ class SegmDataset(Dataset):
         transformed_image = transformed['image']
         transformed_mask = transformed['mask'].float() / 255
         transformed_mask = transformed_mask.unsqueeze(0)
-        return transformed_image, transformed_mask
+
+        image = cv2.resize(
+            image, transformed_image.shape[-2:],
+            interpolation=cv2.INTER_CUBIC
+        )
+
+        return image, transformed_image, transformed_mask
