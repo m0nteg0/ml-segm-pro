@@ -6,6 +6,7 @@ import lightning as L
 from clearml import Task
 from lightning.pytorch.callbacks import ModelCheckpoint
 
+from .metrics_factory import MetricType
 from .segmentation_module import SegmentationModule, TrainParams
 from .data_module import SegmDSModule, DataParams
 
@@ -16,26 +17,49 @@ class TrainManager:
         with args.config.open('r') as file:
             config = yaml.safe_load(file)
 
-        exp_name = config['logging']['exp_name']
-        proj_name = config['logging']['project_name']
+        # Try to get experiment name.
+        try:
+            exp_name = config['logging']['exp_name']
+        except Exception as e:
+            raise RuntimeError(
+                'Failed to find <exp_name> field in logging section.'
+                '<project_name> is required attribute.'
+            ) from e
+
+        # Init clearml task.
         if args.clearml:
+            try:
+                proj_name = config['logging']['project_name']
+            except Exception as e:
+                raise RuntimeError(
+                    'Failed to find <project_name> field in logging section.'
+                    '<project_name> is required attribute for clearml logging.'
+                ) from e
             Task.init(
                 project_name=proj_name, task_name=exp_name
             )
 
+        # Get train and data params
         train_params = TrainParams(**config['train'])
         data_params = DataParams(**config['data'])
 
+        # Init data module
         self._data_module = SegmDSModule(data_params)
+
+        # Init model
         if args.ckpt:
             self._model = SegmentationModule.load_from_checkpoint(args.ckpt)
         else:
             self._model = SegmentationModule(train_params)
 
-        save_dir = Path(config['logging']['default_root_dir'])
-        save_dir = save_dir / config['logging']['exp_name']
+        # Set save directory.
+        save_dir = Path(config['logging'].get('default_root_dir', './'))
+        save_dir = save_dir / exp_name
 
-        best_metric = config['logging']['best_metric']
+        # Set checkpointing callbacks.
+        best_metric = config['logging'].get(
+            'best_metric', MetricType.IOU.value
+        )
         best_saver = ModelCheckpoint(
             dirpath=save_dir, save_top_k=1,
             every_n_epochs=1, filename=f'best_{best_metric}',
@@ -46,6 +70,7 @@ class TrainManager:
             every_n_epochs=1, save_last=True
         )
 
+        # Init lighting trainer.
         epochs = config['train'].get('epochs', 100)
         acc_grad_batches = config['train'].get('acc_grad_batches', 1)
         gradient_clip_val = config['train'].get('gradient_clip_val', 0.5)
@@ -61,9 +86,11 @@ class TrainManager:
         )
 
     def run(self):
+        """Run train process."""
         self._trainer.fit(self._model, datamodule=self._data_module)
 
     def _parse_args(self):
+        """Parse command line arguments."""
         parser = argparse.ArgumentParser(
             description=__doc__
         )
