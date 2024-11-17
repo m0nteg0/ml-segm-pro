@@ -1,5 +1,5 @@
 logging:
-  exp_name: human_seg
+  exp_name: human_seg_v1.01
   project_name: segm-pro
   log_every_n_steps: 50
   default_root_dir: ../data/checkpoints
