@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import cv2
+import torch
 import numpy as np
 from torch.utils.data import Dataset
 
