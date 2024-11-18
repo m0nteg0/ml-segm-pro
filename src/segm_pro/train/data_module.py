@@ -1,3 +1,5 @@
+"""Data module for segmentation tasks."""
+
 from pathlib import Path
 
 import lightning as L
@@ -10,6 +12,8 @@ from .dataset import SegmDataset
 
 
 class DataParams(BaseModel):
+    """Data module parameters for training and validation."""
+
     train_data: Path = Field(
         description='Path to train dataset.'
     )
@@ -44,11 +48,42 @@ class DataParams(BaseModel):
 
 
 class SegmDSModule(L.LightningDataModule):
+    """Data module for segmentation tasks.
+
+    This data module handles loading and preprocessing image and mask pairs for
+    segmentation tasks. It defines transformations for training and validation
+    data, and creates dataloaders to feed the data into the model.
+    """
+
     def __init__(self, params: DataParams):
+        """Initialize the SegmDSModule.
+
+        Parameters
+        ----------
+        params : DataParams
+            A DataParams object containing configuration for data loading
+            and preprocessing. This includes paths to training and
+            validation data, batch sizes, number of workers, and other
+            relevant parameters.
+
+        """
         super().__init__()
         self._data_params = params
 
     def setup(self, stage: str) -> None:
+        """Set up the training and validation datasets.
+
+        This method initializes the training and validation datasets based on
+        the data paths and transformations specified in the
+        _data_params object.
+
+        Parameters
+        ----------
+        stage : str
+            The current stage of training ('train' or 'val'). This determines
+            which dataset to create.
+
+        """
         self.__train_ds = SegmDataset(
             self._data_params.train_data, self.__get_train_transform()
         )
@@ -88,14 +123,16 @@ class SegmDSModule(L.LightningDataModule):
             ToTensorV2(),
         ])
 
-    def train_dataloader(self):
+    def train_dataloader(self) -> DataLoader:
+        """Return the dataloader for the training dataset."""
         return DataLoader(
             self.__train_ds,
             batch_size=self._data_params.train_bs,
             num_workers=self._data_params.train_workers
         )
 
-    def val_dataloader(self):
+    def val_dataloader(self) -> DataLoader:
+        """Return the dataloader for the validation dataset."""
         return DataLoader(
             self.__val_ds,
             batch_size=self._data_params.val_bs,
